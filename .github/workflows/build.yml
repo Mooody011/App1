@@ -12,10 +12,10 @@ jobs:
 
       - name: Extract Files
         run: |
-          unzip --apk-builder.zip
-          # الخطوة دي بتنقل الملفات من الفولدر اللي نتج عن فك الضغط للمكان الرئيسي
+          # التعديل هنا: ضفنا شرطتين قبل الاسم عشان السيرفر ميتلخبطش
+          unzip -- --apk-builder.zip -d extracted_files
           shopt -s dotglob
-          cp -r --apk-builder/* . || true
+          cp -r extracted_files/* . || true
           
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -31,7 +31,15 @@ jobs:
       - name: Build APK
         run: |
           chmod +x scripts/*.sh || true
-          ./build-apk.sh || echo "برنامج البناء مش موجود أو فيه مشكلة"
+          # هندور على ملف البناء ونشغله مهما كان مكانه
+          SCRIPT_PATH=$(find . -name "build-apk.sh" | head -n 1)
+          if [ -f "$SCRIPT_PATH" ]; then
+            chmod +x "$SCRIPT_PATH"
+            $SCRIPT_PATH
+          else
+            echo "الملف build-apk.sh مش موجود"
+            ls -R
+          fi
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
