@@ -13,44 +13,44 @@ jobs:
       - name: Extract Files
         run: |
           unzip app.zip -d extracted_files
-          # نقل كل الملفات للمسار الرئيسي حتى لو جوه فولدرات فرعية
-          find extracted_files -maxdepth 2 -name "package.json" -execdir cp -r . ../../ \; || true
+          shopt -s dotglob
           cp -r extracted_files/* . || true
-          
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Dependencies
+      - name: Install and Generate Android Project
         run: |
+          # 1. تثبيت الاعتمادات
           npm install
-          npm install -D typescript
+          npm install -D typescript @capacitor/cli @capacitor/android
           
+          # 2. بناء ملفات الويب أولاً (مهم جداً)
+          npm run build || mkdir www || mkdir dist
+          
+          # 3. مسح فولدر اندرويد القديم (اللي فيه README بس) وعمله من جديد
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+
       - name: Build APK
         run: |
-          # البحث عن مكان ملف gradlew الحقيقي والدخول للفولدر بتاعه
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          if [ -n "$GRADLEW_PATH" ]; then
-            GRADLE_DIR=$(dirname "$GRADLEW_PATH")
-            cd "$GRADLE_DIR"
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            echo "المعذرة، ملف gradlew مش موجود في أي مكان"
-            ls -R
-            exit 1
-          fi
+          cd android
+          chmod +x gradlew
+          # بناء النسخة الـ Debug عشان نتخطى مشاكل التوقيع (Sign) حالياً
+          ./gradlew assembleDebug
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: my-app-apk
-          path: "**/*.apk"
+          path: "android/app/build/outputs/apk/debug/*.apk"
           
