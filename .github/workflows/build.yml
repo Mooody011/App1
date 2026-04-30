@@ -29,18 +29,22 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          # السطر ده هو اللي هيصلح المشكلة وهيحمل TypeScript وكل اللي ناقص
+          # تثبيت التايب سكريبت والاعتمادات الأساسية
           npm install
+          npm install -D typescript
           
       - name: Build APK
         run: |
           chmod +x scripts/*.sh || true
+          # محاولة تنفيذ أمر المزامنة لو موجود
+          npx cap sync || true
+          
           SCRIPT_PATH=$(find . -name "build-apk.sh" | head -n 1)
           if [ -n "$SCRIPT_PATH" ]; then
             chmod +x "$SCRIPT_PATH"
             $SCRIPT_PATH
           else
-            echo "المعذرة، ملف build-apk.sh مش موجود"
+            echo "الملف build-apk.sh مش موجود"
             ls -R
           fi
           
