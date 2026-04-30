@@ -27,6 +27,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Install Dependencies
+        run: |
+          # السطر ده هو اللي هيصلح المشكلة وهيحمل TypeScript وكل اللي ناقص
+          npm install
+          
       - name: Build APK
         run: |
           chmod +x scripts/*.sh || true
@@ -35,7 +40,7 @@ jobs:
             chmod +x "$SCRIPT_PATH"
             $SCRIPT_PATH
           else
-            echo "الملف build-apk.sh مش موجود"
+            echo "المعذرة، ملف build-apk.sh مش موجود"
             ls -R
           fi
           
