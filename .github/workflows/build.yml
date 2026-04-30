@@ -16,47 +16,47 @@ jobs:
           shopt -s dotglob
           cp -r extracted_files/* . || true
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install and Generate Project
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
         run: |
-          # حل تعارض المكتبات
-          npm install --legacy-peer-deps
-          npm install -D typescript @capacitor/cli @capacitor/android --legacy-peer-deps
+          # استخدام force عشان نحل أي تعارض في المكتبات
+          npm install --force
+          npm install -g @capacitor/cli @capacitor/android
           
-          # بناء ملفات الويب
-          npm run build || (mkdir dist && touch dist/index.html)
-          
-          # إنشاء مشروع الأندرويد
+      - name: Web Build
+        run: |
+          # لازم نعمل بناء لملفات الويب الأول لأن Capacitor بيحتاجها
+          npm run build || (mkdir -p dist && echo "<html></html>" > dist/index.html)
+
+      - name: Initialize Android Project
+        run: |
+          # مسح أي فولدر قديم وبدء مشروع نضيف
           rm -rf android
           npx cap add android
-          npx cap sync android
-
-      - name: Upgrade Gradle and Fix Configuration
-        run: |
-          cd android
-          # تحديث محرك Gradle عشان يوافق Java 17
-          ./gradlew wrapper --gradle-version 8.7
           
-          # تفعيل الـ BuildConfig وتحديث الـ SDK لتوافق أندرويد 15/16
-          echo "android.defaults.buildfeatures.buildconfig=true" >> gradle.properties
-          sed -i 's/compileSdkVersion 34/compileSdkVersion 35/g' app/build.gradle || true
-          sed -i 's/targetSdkVersion 34/targetSdkVersion 35/g' app/build.gradle || true
+      - name: Force Gradle Update
+        run: |
+          # تحديث نسخة Gradle يدوياً في ملف الإعدادات لضمان التوافق مع Java 17
+          sed -i 's/gradle-8.2-bin.zip/gradle-8.7-bin.zip/g' android/gradle/wrapper/gradle-wrapper.properties || true
+          
+          # تفعيل الـ BuildConfig المهمة لأندرويد 15
+          echo "android.defaults.buildfeatures.buildconfig=true" >> android/gradle.properties
 
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          # بناء التطبيق مع تجاهل أخطاء التوقيع حالياً
+          # بناء نسخة الـ Debug
           ./gradlew assembleDebug --no-daemon
           
       - name: Upload APK
