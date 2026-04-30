@@ -29,14 +29,16 @@ jobs:
 
       - name: Install and Generate Android Project
         run: |
-          # 1. تثبيت الاعتمادات
-          npm install
-          npm install -D typescript @capacitor/cli @capacitor/android
+          # استخدمنا --legacy-peer-deps عشان نحل خناقة إصدارات المكتبات
+          npm install --legacy-peer-deps
           
-          # 2. بناء ملفات الويب أولاً (مهم جداً)
+          # تثبيت الأدوات اللازمة للبناء
+          npm install -D typescript @capacitor/cli @capacitor/android --legacy-peer-deps
+          
+          # بناء ملفات الويب
           npm run build || mkdir www || mkdir dist
           
-          # 3. مسح فولدر اندرويد القديم (اللي فيه README بس) وعمله من جديد
+          # مسح فولدر اندرويد القديم وعمله من جديد بشكل نضيف
           rm -rf android
           npx cap add android
           npx cap sync android
@@ -45,7 +47,6 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          # بناء النسخة الـ Debug عشان نتخطى مشاكل التوقيع (Sign) حالياً
           ./gradlew assembleDebug
           
       - name: Upload APK
