@@ -29,23 +29,26 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          # تثبيت التايب سكريبت والاعتمادات الأساسية
           npm install
           npm install -D typescript
           
       - name: Build APK
         run: |
-          chmod +x scripts/*.sh || true
-          # محاولة تنفيذ أمر المزامنة لو موجود
-          npx cap sync || true
-          
-          SCRIPT_PATH=$(find . -name "build-apk.sh" | head -n 1)
-          if [ -n "$SCRIPT_PATH" ]; then
-            chmod +x "$SCRIPT_PATH"
-            $SCRIPT_PATH
+          # المرة دي بنقول للسيرفر يدخل جوه فولدر android عشان يلاقي ملف البناء
+          if [ -d "android" ]; then
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleRelease || ./gradlew assembleDebug
           else
-            echo "الملف build-apk.sh مش موجود"
-            ls -R
+            # لو الملف في مكان تاني، الكود ده هيدور عليه ويشغله
+            SCRIPT_PATH=$(find . -name "build-apk.sh" | head -n 1)
+            if [ -n "$SCRIPT_PATH" ]; then
+              chmod +x "$SCRIPT_PATH"
+              $SCRIPT_PATH
+            else
+              echo "فولدر android أو ملف البناء مش موجود"
+              ls -R
+            fi
           fi
           
       - name: Upload APK
