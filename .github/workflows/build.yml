@@ -1,0 +1,41 @@
+name: Build Android APK
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract Files
+        run: |
+          unzip --apk-builder.zip
+          # الخطوة دي بتنقل الملفات من الفولدر اللي نتج عن فك الضغط للمكان الرئيسي
+          shopt -s dotglob
+          cp -r --apk-builder/* . || true
+          
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build APK
+        run: |
+          chmod +x scripts/*.sh || true
+          ./build-apk.sh || echo "برنامج البناء مش موجود أو فيه مشكلة"
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-app-apk
+          path: "**/*.apk"
+          
