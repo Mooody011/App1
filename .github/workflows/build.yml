@@ -13,7 +13,8 @@ jobs:
       - name: Extract Files
         run: |
           unzip app.zip -d extracted_files
-          shopt -s dotglob
+          # نقل كل الملفات للمسار الرئيسي حتى لو جوه فولدرات فرعية
+          find extracted_files -maxdepth 2 -name "package.json" -execdir cp -r . ../../ \; || true
           cp -r extracted_files/* . || true
           
       - name: Setup Node
@@ -34,21 +35,17 @@ jobs:
           
       - name: Build APK
         run: |
-          # المرة دي بنقول للسيرفر يدخل جوه فولدر android عشان يلاقي ملف البناء
-          if [ -d "android" ]; then
-            cd android
+          # البحث عن مكان ملف gradlew الحقيقي والدخول للفولدر بتاعه
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          if [ -n "$GRADLEW_PATH" ]; then
+            GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+            cd "$GRADLE_DIR"
             chmod +x gradlew
-            ./gradlew assembleRelease || ./gradlew assembleDebug
+            ./gradlew assembleDebug
           else
-            # لو الملف في مكان تاني، الكود ده هيدور عليه ويشغله
-            SCRIPT_PATH=$(find . -name "build-apk.sh" | head -n 1)
-            if [ -n "$SCRIPT_PATH" ]; then
-              chmod +x "$SCRIPT_PATH"
-              $SCRIPT_PATH
-            else
-              echo "فولدر android أو ملف البناء مش موجود"
-              ls -R
-            fi
+            echo "المعذرة، ملف gradlew مش موجود في أي مكان"
+            ls -R
+            exit 1
           fi
           
       - name: Upload APK
