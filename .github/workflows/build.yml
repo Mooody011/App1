@@ -30,8 +30,6 @@ jobs:
             flutter:
               sdk: flutter
             adhan: ^2.0.0+1
-            geolocator: ^10.1.0
-            shared_preferences: ^2.2.2
             intl: ^0.19.0
           flutter:
             uses-material-design: true
@@ -40,18 +38,18 @@ jobs:
           python3 - << 'EOF'
           mp = "android/app/src/main/AndroidManifest.xml"
           m = open(mp).read()
-          p = '<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/><uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/><uses-permission android:name="android.permission.VIBRATE"/>'
+          p = '<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.VIBRATE"/>'
           m = m.replace("<application", p + "<application", 1).replace('android:label="app"', 'android:label="مواقيت الأذان"')
           open(mp, "w").write(m)
           EOF
           cat << 'EOF' > lib/main.dart
           import 'dart:async';
+          import 'dart:convert';
+          import 'dart:io';
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
           import 'package:flutter/services.dart';
           import 'package:adhan/adhan.dart';
-          import 'package:geolocator/geolocator.dart';
-          import 'package:shared_preferences/shared_preferences.dart';
           import 'package:intl/intl.dart' hide TextDirection;
 
           void main() {
@@ -107,10 +105,12 @@ jobs:
             int tab = 0, tasbih = 0, total = 0, offset = 0;
             double lat = 29.9773, lng = 31.0946;
             String loc = 'الجيزة - حدائق الأهرام / أكتوبر', method = 'egyptian', madhab = 'shafi', zekr = azkar[0];
-            bool alertOn = true, gpsBusy = false;
+            bool alertOn = true, locBusy = false;
             DateTime now = DateTime.now(), selDate = DateTime.now();
             Timer? timer;
             String lastTriggered = '';
+
+            File get _configFile => File('${Directory.systemTemp.path}/athan_prefs_v2.json');
 
             @override
             void initState() {
@@ -130,20 +130,30 @@ jobs:
             }
 
             Future<void> _load() async {
-              final p = await SharedPreferences.getInstance();
-              setState(() {
-                lat = p.getDouble('lat') ?? 29.9773; lng = p.getDouble('lng') ?? 31.0946;
-                loc = p.getString('loc') ?? loc; method = p.getString('m') ?? 'egyptian';
-                madhab = p.getString('md') ?? 'shafi'; total = p.getInt('tot') ?? 0;
-                offset = p.getInt('off') ?? 0; alertOn = p.getBool('nf') ?? true;
-              });
+              try {
+                if (await _configFile.exists()) {
+                  final data = jsonDecode(await _configFile.readAsString());
+                  setState(() {
+                    lat = (data['lat'] ?? 29.9773).toDouble();
+                    lng = (data['lng'] ?? 31.0946).toDouble();
+                    loc = data['loc'] ?? loc;
+                    method = data['m'] ?? 'egyptian';
+                    madhab = data['md'] ?? 'shafi';
+                    total = data['tot'] ?? 0;
+                    offset = data['off'] ?? 0;
+                    alertOn = data['nf'] ?? true;
+                  });
+                }
+              } catch (_) {}
             }
 
             Future<void> _save() async {
-              final p = await SharedPreferences.getInstance();
-              p.setDouble('lat', lat); p.setDouble('lng', lng); p.setString('loc', loc);
-              p.setString('m', method); p.setString('md', madhab); p.setInt('tot', total);
-              p.setInt('off', offset); p.setBool('nf', alertOn);
+              try {
+                await _configFile.writeAsString(jsonEncode({
+                  'lat': lat, 'lng': lng, 'loc': loc, 'm': method,
+                  'md': madhab, 'tot': total, 'off': offset, 'nf': alertOn
+                }));
+              } catch (_) {}
             }
 
             PrayerTimes _calc(DateTime d) {
@@ -188,21 +198,31 @@ jobs:
               );
             }
 
-            Future<void> _gps() async {
-              setState(() => gpsBusy = true);
+            Future<void> _autoLocate() async {
+              setState(() => locBusy = true);
               try {
-                var perm = await Geolocator.checkPermission();
-                if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-                final pos = await Geolocator.getCurrentPosition();
-                setState(() {
-                  lat = pos.latitude; lng = pos.longitude;
-                  loc = 'GPS (${lat.toStringAsFixed(2)}, ${lng.toStringAsFixed(2)})';
-                });
-                _save();
+                final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+                final req = await client.getUrl(Uri.parse('http://ip-api.com/json'));
+                final res = await req.close();
+                final body = await res.transform(utf8.decoder).join();
+                final map = jsonDecode(body);
+                if (map['status'] == 'success') {
+                  setState(() {
+                    lat = (map['lat'] as num).toDouble();
+                    lng = (map['lon'] as num).toDouble();
+                    loc = 'تلقائي: ${map['city']} (${lat.toStringAsFixed(2)}, ${lng.toStringAsFixed(2)})';
+                  });
+                  _save();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الموقع والمواقيت تلقائياً بنجاح')));
+                  }
+                }
               } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر جلب الموقع: $e')));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اختر مدينتك من الإعدادات للعمل بدون إنترنت')));
+                }
               } finally {
-                if (mounted) setState(() => gpsBusy = false);
+                if (mounted) setState(() => locBusy = false);
               }
             }
 
@@ -304,7 +324,7 @@ jobs:
               return Scaffold(
                 appBar: AppBar(
                   title: const Text('مواقيت الأذان والقبلة'),
-                  actions: [IconButton(onPressed: gpsBusy ? null : _gps, icon: const Icon(Icons.my_location, color: Color(0xFF10B981)))],
+                  actions: [IconButton(onPressed: locBusy ? null : _autoLocate, icon: const Icon(Icons.my_location, color: Color(0xFF10B981)))],
                 ),
                 body: views[tab],
                 bottomNavigationBar: NavigationBar(
